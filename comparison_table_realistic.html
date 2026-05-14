@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>搜索系统对比分析</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 1400px;
+            width: 100%;
+        }
+        
+        .title {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 32px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        th {
+            color: white;
+            padding: 18px 16px;
+            text-align: left;
+            font-weight: 600;
+            border: none;
+        }
+        
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #e8e8e8;
+            vertical-align: middle;
+        }
+        
+        tbody tr {
+            transition: all 0.3s ease;
+        }
+        
+        tbody tr:hover {
+            background-color: #f8f9ff;
+        }
+        
+        tbody tr:nth-child(even) {
+            background-color: #fafbff;
+        }
+        
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .feature-name {
+            font-weight: 600;
+            color: #333;
+            min-width: 240px;
+            padding-left: 20px;
+            font-size: 13px;
+        }
+        
+        .checkmark {
+            color: #10b981;
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 40px;
+        }
+        
+        .crossmark {
+            color: #ef4444;
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 40px;
+        }
+        
+        .partial {
+            color: #f59e0b;
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 40px;
+        }
+        
+        .system-header {
+            text-align: center;
+            font-weight: 600;
+            color: white;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .system-col {
+            width: 280px;
+        }
+        
+        .system-1 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .system-2 {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .system-3 {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .legend {
+            margin-top: 30px;
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            flex-wrap: wrap;
+            padding-top: 20px;
+            border-top: 2px solid #e8e8e8;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+        
+        .legend-icon {
+            font-size: 20px;
+            min-width: 30px;
+            text-align: center;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e8e8e8;
+        }
+        
+        .stat-box {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 8px;
+        }
+        
+        .stat-box:nth-child(1) {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .stat-box:nth-child(2) {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .stat-box:nth-child(3) {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        
+        .stat-number {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #666;
+            font-size: 12px;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            table {
+                font-size: 12px;
+            }
+            
+            th, td {
+                padding: 10px 8px;
+            }
+            
+            .title {
+                font-size: 24px;
+            }
+            
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="title">🔍 搜索系统功能对比分析</div>
+        <div class="subtitle">三代搜索系统的功能演进与对比</div>
+        
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="min-width: 250px;">功能需求</th>
+                        <th class="system-1 system-col system-header">传统搜索引擎<br>（Google 2000s）</th>
+                        <th class="system-2 system-col system-header">电商搜索系统<br>（eBay 2015）</th>
+                        <th class="system-3 system-col system-header">Search Agent<br>（你的系统）</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 基础功能 -->
+                    <tr>
+                        <td class="feature-name">📝 关键词匹配与倒排索引</td>
+                        <td class="checkmark">✓</td>
+                        <td class="checkmark">✓</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🔤 中文分词器</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">📊 基础日志与统计</td>
+                        <td class="checkmark">✓</td>
+                        <td class="checkmark">✓</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🔗 分布式架构</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    
+                    <!-- 中等难度功能 -->
+                    <tr>
+                        <td class="feature-name">🎯 智能 Query 解析（意图识别）</td>
+                        <td class="crossmark">✕</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">⚡ 实时数据更新</td>
+                        <td class="crossmark">✕</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">📄 网页爬取与解析</td>
+                        <td class="checkmark">✓</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🤖 机器学习重排</td>
+                        <td class="crossmark">✕</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🧪 缓存加速（Redis）</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🌊 消息队列处理</td>
+                        <td class="crossmark">✕</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    
+                    <!-- 高难度功能 -->
+                    <tr>
+                        <td class="feature-name">🔀 多通道混合召回（4层）</td>
+                        <td class="crossmark">✕</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🧬 向量检索与语义理解</td>
+                        <td class="crossmark">✕</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🔄 MCP 协调层（同步+异步）</td>
+                        <td class="crossmark">✕</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🧹 二次数据清洗与质量评估</td>
+                        <td class="crossmark">✕</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">📊 Prometheus 指标监控</td>
+                        <td class="crossmark">✕</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🔍 Jaeger 分布式追踪</td>
+                        <td class="crossmark">✕</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🔐 PII 自动脱敏与合规</td>
+                        <td class="crossmark">✕</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">📋 Auditd 安全审计日志</td>
+                        <td class="crossmark">✕</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🎚️ 域名级爬取配额控制</td>
+                        <td class="partial">◐</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🔁 原子索引切换与版本管理</td>
+                        <td class="crossmark">✕</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">⏱️ 响应延迟 P95 &lt;300ms</td>
+                        <td class="crossmark">✕</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🛡️ 自动熔断与快速降级</td>
+                        <td class="crossmark">✕</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">♻️ 幂等消费与去重</td>
+                        <td class="crossmark">✕</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🎯 A/B 测试与灰度发布</td>
+                        <td class="crossmark">✕</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🚀 Kubernetes 自动伸缩</td>
+                        <td class="crossmark">✕</td>
+                        <td class="crossmark">✕</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">🔧 端到端可观测与调试</td>
+                        <td class="crossmark">✕</td>
+                        <td class="partial">◐</td>
+                        <td class="checkmark">✓</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-number">8/26</div>
+                <div class="stat-label">功能支持比例</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">14/26</div>
+                <div class="stat-label">功能支持比例</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">26/26</div>
+                <div class="stat-label">功能支持比例</div>
+            </div>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-icon checkmark">✓</div>
+                <div>完全支持</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-icon partial">◐</div>
+                <div>部分支持</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-icon crossmark">✕</div>
+                <div>不支持</div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>数据来源：</strong>系统架构分析文档 | <strong>更新时间：</strong>2026年5月</p>
+            <p style="margin-top: 10px; font-size: 11px; color: #999;">
+                传统搜索引擎代表 Google 2000-2005 年的技术栈；电商搜索系统代表 eBay/Alibaba 2015 年的技术水平；<br>
+                Search Agent 是当前（2026年）基于大模型和分布式系统最佳实践的新一代检索系统
+            </p>
+        </div>
+    </div>
+</body>
+</html>
