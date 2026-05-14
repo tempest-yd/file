@@ -1,0 +1,132 @@
+\chapter{基于模型驱动的实时与离线混合检索系统的设计与实现}
+本章将详细介绍Search Agent 系统的实现过程。该系统主要用于对用户输入的查询内容进行精准的关键词提炼和分析，通过结合自然语言处理模型对查询进行分词和意图识别，进而调用后端搜索引擎进行检索。质检系统不仅对实时搜索结果进行数据清洗、二次清洗和质量评估，还实现了对离线搜索数据的检索与分析，确保了系统输出结果的高质量与精准性。通过完善的数据处理与评估机制，系统能够有效优化搜索效果和用户体验。
+\section{Prompt 解析模块的实现} 
+Prompt 解析模块的实现目标是在严格的延迟预算内，将用户自然语言提示稳定、可解释地转化为检索指令与任务元数据，并向上游/下游提供清晰的接口与审计信息。实现上采用“规则层 + 在线轻量模型 + 离线强模型”三层架构：规则层负责拦截显性命令、合规检查和简单模板匹配；在线轻量模型（蒸馏/量化后的 Transformer 或双塔编码器）负责低延迟的关键词提取、意图分类与 query rewrite；离线强模型在异步路径对在线解析结果做校正与质量回流，用于周期性更新规则与模型。
+\begin{table}[H]
+\centering
+\caption{Prompt解析模块接口描述（Search Agent）}
+\label{tab:prompt-parsing-interfaces}
+% 局部调整行高以增加留白（不要太紧凑）
+{\renewcommand{\arraystretch}{0.7}
+\begin{tabular}{p{3cm} p{5cm} p{5cm}}
+\hline
+接口名 & 功能描述 & 责任划分 \\
+\hline
+parse\_prompt & 用户Prompt分词提取关键词 & MCP Server负责调用模型解析 \\ \hline
+realtime\_search & 在线搜索请求发起与管理 & 在线搜索后端负责检索 \\ \hline
+realtime\_crawl & 实时爬取并解析搜索结果 & 爬虫进程负责爬取解析 \\ \hline
+push\_to\_processing & 检索内容实时推送到处理模块 & Search Agent推送数据处理消费 \\ \hline
+offline\_search & 离线垂域文本/向量搜索 & 离线索引服务负责检索 \\ \hline
+index\_build & 倒排与向量库建库更新 & 数据处理系统负责建库维护 \\ \hline
+quality\_assessment & 检索结果质量评估与二次清洗 & 数据处理模块负责质检与清洗 \\ \hline
+\end{tabular}
+}
+\end{table}
+
+输入输出接口统一用 Protobuf 描述，输入包含原始 prompt、用户上下文（用户 id、历史查询摘要、地域/设备信息）、请求优先级与 trace\_id；输出（QueryPackage）包含关键词列表（带权重）、候选重写查询、多意图子任务列表、触发爬取标志、置信度与解析元数据（模型版本、耗时、解释性 token/score）。在线模型部署在低延迟推理池（ONNX/Triton/ORT），并结合局部缓存（LRU）缓存热 prompt 的解析结果，支持批量化推理以提升并发吞吐。为了保证可控性与可解释性，模型输出经过后处理规则校验：黑名单命中会覆写触发爬取标志，敏感实体将被脱敏或触发人工复核标识。
+\begin{figure}[H]
+\centering
+\includegraphics[
+width=1.\textwidth,keepaspectratio]{picc/1.pdf}
+\caption{Prompt 解析模块的实现}
+\label{fig:zhouqishixian}
+\end{figure}
+解析过程包含多项工程保障：预处理包括中文分词/normalize（统一全角半角、繁简转换）、拼写纠错与短语保留；实体链接通过轻量 NER 与外部知识库做快速校正；置信度校准通过温度缩放或后验校准器（Platt scaling）降低输出过度自信的风险。异常处理策略包括模型超时回退到规则、模型低置信触发澄清交互或调用离线增强路径。为支持持续迭代，解析模块埋点采集解析耗时分布、置信度分布、触发爬取率与 fallback 率，并将样本（含原 prompt、解析结果、后续检索质量指标）写入训练集，用于离线评估与模型重训练。版本管理、灰度发布与 A/B 实验通过 MCM 协调：模型新版本先在少量流量灰度，若关键 SLI（解析精确度、下游召回质量、触发爬取误触率）稳定再全量发布。
+\section{实时检索与爬取模块的实现}
+实时检索与爬取模块实现的核心在于“先快后补”的工程策略：实时检索（bin search）提供低延迟候选，爬取模块在判定必要时异步抓取详情并通过数据处理管道补全入库。实时检索适配器实现连接池管理、并发控制、请求合并与熔断策略；对热点词设置本地缓存与提前预热任务以应对突发流量。调用流程是：Search Agent 将 QueryPackage 发给 bin search 适配器，适配器并行调用倒排与向量接口，快速合并 TopK 候选并返回给 Search Agent；同时根据触发逻辑决定是否下发爬取任务。
+\begin{table}[H]
+\centering
+\caption{实时检索与爬取模块接口描述（Search Agent 实时模块）}
+\label{tab:realtime-retrieval-crawl-interfaces}
+% 局部调整行高以增加留白（不要太紧凑）
+{\renewcommand{\arraystretch}{0.7}
+\begin{tabular}{p{4cm} p{4cm} p{5cm}}
+\hline
+接口名 & 功能描述 & 责任划分 \\
+\hline
+start\_hotspot\_polling & 定时触发热点检索 & 调度服务负责触发 \\\hline
+query\_online\_search & 发起在线检索请求 & Search Agent调用在线后端 \\\hline
+stream\_search\_results & 实时推送检索结果流 & 在线后端负责推送 \\\hline
+trigger\_realtime\_crawl & 关键词触发实时爬取 & 爬虫服务负责爬取解析 \\\hline
+crawl\_parse\_realtime & 爬取内容实时解析摘要 & 爬虫解析组件负责 \\\hline
+crawl\_timeout\_control & 爬取超时与重试控制 & 爬虫调度负责 \\\hline
+push\_to\_data\_processing & 解析结果推送数据处理 & Search Agent推送数据处理消费 \\\hline
+\end{tabular}
+}
+\end{table}
+爬取模块由任务调度、下载渲染与解析三部分组成。任务调度器接收来自 Search Agent 的任务，做去重（URL 规范化与指纹检查）、优先级排队、域名限速与配额校验，并将合格任务放入 Kafka-like 队列。下载层先尝试轻量 HTTP 抓取，快速判断是否需要渲染（基于页面特征或预判模型）；若需要，则进入渲染池（Playwright/Puppeteer），渲染池采取资源隔离与池化策略，限制每个域名并发与全局渲染并发以控制成本与避免被封禁。解析层结合规则（readability、XPath）与模型（DOM 节点分类、轻量 NER）提取结构化字段，并产生 parse\_confidence、extraction\_errors 等质量元数据。任务全过程严格的超时控制（download\_timeout、render\_timeout、parse\_timeout）与幂等设计（task\_id、断点续传、重复检测）保证系统在高并发或目标站点异常时以可控方式降级。
+\begin{figure}[H]
+\centering
+\includegraphics[
+width=1.\textwidth,keepaspectratio]{picc/2.pdf}
+\caption{实时检索与爬取模块的实现}
+\label{fig:zhouqishixian}
+\end{figure}
+爬取输出通过消息队列下发到实时解析消费者，消费者完成快速校验后将初步结构化数据写入中间存储并触发数据处理流水线。为保证合规与安全，爬取前会检查 robots.txt、站点白/灰/黑名单并记录审计日志；对含敏感信息的解析结果触发自动脱敏或入人工复核队列。监控维度包括爬取成功率、域名级失败率、渲染占比、队列积压与爬取引起的 downstream lag，异常阈值触发自动限流或暂停爬取策略。为充分利用资源，系统支持基于优先级的动态扩缩容，低优先级任务在高负载时被排队或降级。
+\section{离线检索与索引模块的实现}
+离线检索与索引模块负责大规模垂域数据的采集、清洗、向量化与建库，目标是提供高质量、语义丰富且可持续更新的索引服务。实现管线分为采集层、批量清洗层、向量化/索引构建层与发布层。采集层支持 API 拉取、合作方数据导入与授权导出，所有原始文件与采集快照落到对象存储并记录详细元数据以便重跑。批量清洗基于 Spark/Flink 或 K8s batch jobs 执行，包含 HTML 去壳、噪声过滤、时间/作者标准化、标签提取与重复检测（MinHash/SimHash），并输出高质量的结构化候选集与质量分。
+\begin{table}[H]
+\centering
+\caption{离线检索与索引模块接口描述（Search Agent 离线模块）}
+\label{tab:offline-retrieval-index-interfaces}
+% 局部调整行高以增加留白（不要太紧凑）
+{\renewcommand{\arraystretch}{0.7}
+\begin{tabular}{p{4cm} p{4cm} p{5cm}}
+\hline
+接口名 & 功能描述 & 责任划分 \\
+\hline
+schedule\_batch\_crawl & 定时批量抓取垂域数据 & 调度服务与采集模块负责 \\\hline
+fetch\_domain\_snapshot & 获取指定垂域数据快照 & 数据采集与存储负责 \\\hline
+offline\_text\_search & 基于关键词的文本检索 & 离线搜索服务负责 \\\hline
+offline\_vector\_search & 基于向量的相似检索 & 向量检索服务负责 \\\hline
+build\_inverted\_index & 构建倒排索引并持久化 & 索引构建服务负责 \\\hline
+build\_vector\_index & 构建向量索引并持久化 & 向量索引服务负责 \\\hline
+incremental\_index\_update & 增量索引更新与合并 & 索引维护服务负责 \\\hline
+index\_health\_metrics & 索引状态与统计监控 & 监控与运维负责 \\\hline
+\end{tabular}
+}
+\end{table}
+向量化阶段使用版本化的 embedding 模型做批量推理（GPU 加速），并记录 embedding\_model\_version 及预处理参数。向量索引采用 Faiss/Milvus 等，工程上采用“热表 + 主表”的混合策略：新数据先写入热内存索引（小型 HNSW）以保证短期可检索，定期批量并入主索引并进行压缩（IVF-PQ）以降低长期存储。倒排索引使用 Elasticsearch/OpenSearch，构建时通过合理映射（mapping）与分词器（针对中文的 IK/HanLP）确保查询质量，构建完成后通过 snapshot 与 alias 原子切换发布到线上以保证无缝替换。增量更新采用 delta 索引与批量合并策略：增量写入走消息队列聚合批次写入，达到阈值触发后台合并并做 segment 优化。
+\begin{figure}[H]
+\centering
+\includegraphics[
+width=1.\textwidth,keepaspectratio]{picc/3.pdf}
+\caption{离线检索与索引模块的实现}
+\label{fig:zhouqishixian}
+\end{figure}
+索引构建与发布流程注重可回滚与可验证：每次构建记录构建参数、checksum 与样例查询回归结果；构建后在灰度流量上验证召回与重排指标，满足门槛后才切换别名。索引监控包括构建时长、segment 合并时间、查询延迟与内存占用，异常时支持回滚到上一个 snapshot。为支持研究与 A/B 实验，系统支持同时运行多套索引版本并按路由进行流量切分。
+\section{召回融合与重排模块的实现}
+召回融合与重排实现的目标是将来自多通道的候选（实时倒排、离线倒排、向量召回、爬取产物）统一评分、去重并给出最终排序，同时在延迟约束下最大化检索质量。实现分为三层：归一化与去重层、融合与候选裁剪层、分层重排层。归一化首先对不同通道原始分数进行标准化（min-max、z-score 或基于小型校准模型），并附带来源信任度与质量元数据（如 parse\_confidence、source\_score）。去重采用两阶段策略：第一阶段基于 doc\_id 做精确去重；第二阶段基于 SimHash/MinHash 或 embedding cosine 做近似去重，以过滤相似内容但保留语义多样性。
+
+融合层执行多通道候选合并与份额控制（配置化权重或学习型融合器），并根据业务策略裁剪候选池（例如保留 top 500），在此阶段会计算重排所需的基础特征（BM25、term overlap、embedding\_similarity、source\_quality、freshness 等）并从特征仓库或缓存读取静态特征以降低在线计算成本。重排层采用分层架构：轻量级在线 LTR（LightGBM/GBDT）作为主重排器，保证毫秒级响应；对 top-N（例如 top50）可选启用 cross-encoder 做精排与一致性打分，但仅对高价值请求或在可接受延迟条件下启用。为缩短 cross-encoder 延迟，可采用蒸馏后的双塔在在线路径提供近似 cross 评分。
+\begin{table}[H]
+\centering
+\caption{召回融合与重排模块接口描述（Search Agent 召回融合与重排）}
+\label{tab:recall-fusion-rerank-interfaces}
+% 局部调整行高以增加留白（不要太紧凑）
+{\renewcommand{\arraystretch}{0.7}
+\begin{tabular}{p{4cm} p{4cm} p{5cm}}
+\hline
+接口名 & 功能描述 & 责任划分 \\
+\hline
+aggregate\_candidates & 多源召回候选合并 & 召回与融合服务负责 \\\hline
+deduplicate\_results & 候选结果去重处理 & 融合服务负责 \\\hline
+score\_candidates & 候选初筛打分 & 基线打分服务负责 \\\hline
+rerank\_with\_model & 基于模型的重排序 & 重排模型服务负责 \\\hline
+diversity\_filter & 多样性与去偏处理 & 融合/重排服务负责 \\\hline
+finalize\_results & 阈值过滤与结果截断 & 结果返回服务负责 \\\hline
+log\_and\_metrics & 日志记录与质量评估 & 监控与评估负责 \\\hline
+\end{tabular}
+}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[
+width=1.\textwidth,keepaspectratio]{picc/4.pdf}
+\caption{召回融合与重排模块的实现}
+\label{fig:zhouqishixian}
+\end{figure}
+系统在实现上重视特征工程与可观测性：大量静态特征（文档质量分、历史点击率）提前离线计算并存入特征服务；实时特征（query-document overlap、fetch\_latency）在线计算并缓存。重排模型训练基于离线标注（人工标注 + clickthrough 纠偏）并包含数据流水线（特征计算、训练、验证、模型注册）。上线前通过离线回放验证 ranking lift，并在灰度期间以线上指标（CTR、满意度、回复率）检验模型效果。为支持解释性与审计，重排输出包含 top contributing features 与来源 attribution，用于前端展示与问题排查。最后，融合与重排模块与监控链路深度集成：监控重排延迟分位、重排提升效果与跨通道贡献度，以便在异常时触发自动降级（例如禁用 cross-encoder 或降低重排深度）保障服务可用性。
+\section{本章小结}
+本章重点阐述了Search Agent系统各核心模块的具体实现过程，体现了从理论设计到工程落地的关键转化。在Prompt解析模块中，通过引入大语言模型，实现对用户输入语义的理解与结构化解析，从而生成高质量查询请求，为后续检索提供基础。在实时检索与爬取模块中，结合在线搜索接口与动态爬取机制，实现对互联网实时信息的获取，并通过数据清洗与解析保证结果质量。在离线检索模块中，基于构建好的文本索引与向量索引，实现对垂直领域知识库的高效召回，同时通过索引更新机制保障数据的时效性。在召回融合与重排模块中，采用多路召回策略融合实时与离线结果，并结合排序模型对候选结果进行精排，以提升整体检索质量与用户体验。本章在实现过程中充分考虑系统性能与扩展性，通过模块解耦与接口规范设计，确保系统具备良好的工程可维护性。总体而言，本章验证了系统设计的可行性，并为后续测试与优化奠定了实践基础。
