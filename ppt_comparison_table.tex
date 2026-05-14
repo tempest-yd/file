@@ -1,0 +1,89 @@
+\begin{table}[H]
+\centering
+\caption{搜索系统功能对比分析表}
+\label{tab:search-system-comparison}
+{\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{p{4cm}|c|c|c}
+\hline
+\textbf{功能需求} & \textbf{传统搜索引擎} & \textbf{电商搜索系统} & \textbf{Search Agent} \\
+ & \textbf{(Google 2000s)} & \textbf{(eBay 2015)} & \textbf{(你的系统)} \\
+\hline
+\multicolumn{4}{c}{\textit{基础功能}} \\
+\hline
+📝 关键词匹配与倒排索引 & \cellcolor{green!20}✓ & \cellcolor{green!20}✓ & \cellcolor{green!20}✓ \\
+\hline
+🔤 中文分词器 & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ & \cellcolor{green!20}✓ \\
+\hline
+📊 基础日志与统计 & \cellcolor{green!20}✓ & \cellcolor{green!20}✓ & \cellcolor{green!20}✓ \\
+\hline
+🔗 分布式架构 & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ & \cellcolor{green!20}✓ \\
+\hline
+\multicolumn{4}{c}{\textit{中等难度功能}} \\
+\hline
+🎯 智能Query解析（意图识别） & \cellcolor{red!20}✕ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+⚡ 实时数据更新 & \cellcolor{red!20}✕ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+📄 网页爬取与解析 & \cellcolor{green!20}✓ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+🤖 机器学习重排 & \cellcolor{red!20}✕ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+🧪 缓存加速（Redis） & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ & \cellcolor{green!20}✓ \\
+\hline
+🌊 消息队列处理 & \cellcolor{red!20}✕ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+\multicolumn{4}{c}{\textit{高难度功能}} \\
+\hline
+🔀 多通道混合召回（4层） & \cellcolor{red!20}✕ & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ \\
+\hline
+🧬 向量检索与语义理解 & \cellcolor{red!20}✕ & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ \\
+\hline
+🔄 MCP协调层（同步+异步） & \cellcolor{red!20}✕ & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ \\
+\hline
+🧹 二次数据清洗与质量评估 & \cellcolor{red!20}✕ & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ \\
+\hline
+📊 Prometheus指标监控 & \cellcolor{red!20}✕ & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ \\
+\hline
+🔍 Jaeger分布式追踪 & \cellcolor{red!20}✕ & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ \\
+\hline
+🔐 PII自动脱敏与合规 & \cellcolor{red!20}✕ & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ \\
+\hline
+📋 Auditd安全审计日志 & \cellcolor{red!20}✕ & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ \\
+\hline
+🎚️ 域名级爬取配额控制 & \cellcolor{yellow!20}◐ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+🔁 原子索引切换与版本管理 & \cellcolor{red!20}✕ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+⏱️ 响应延迟P95 $<$ 300ms & \cellcolor{red!20}✕ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+🛡️ 自动熔断与快速降级 & \cellcolor{red!20}✕ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+♻️ 幂等消费与去重 & \cellcolor{red!20}✕ & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ \\
+\hline
+🎯 A/B测试与灰度发布 & \cellcolor{red!20}✕ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+🚀 Kubernetes自动伸缩 & \cellcolor{red!20}✕ & \cellcolor{red!20}✕ & \cellcolor{green!20}✓ \\
+\hline
+🔧 端到端可观测与调试 & \cellcolor{red!20}✕ & \cellcolor{yellow!20}◐ & \cellcolor{green!20}✓ \\
+\hline
+\multicolumn{4}{c}{\textit{统计数据}} \\
+\hline
+功能支持总数 & 8/26 & 14/26 & 26/26 \\
+\hline
+支持比例 & 30.8\% & 53.8\% & 100\% \\
+\hline
+\end{tabular}
+}
+
+\raggedright
+\small
+\textbf{说明：} 
+\begin{itemize}
+    \item[$\checkmark$] 表示功能完全支持
+    \item[$\approx$] 表示功能部分支持或有基础实现
+    \item[$\times$] 表示功能不支持
+\end{itemize}
+
+\textbf{数据来源：} 系统架构设计文档 | \textbf{更新时间：} 2026年5月
+
+\end{table}
