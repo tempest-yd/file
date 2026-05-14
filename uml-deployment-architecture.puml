@@ -1,0 +1,273 @@
+@startuml Search_Agent_Deployment_Architecture
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam classBackgroundColor #F0F0F0
+skinparam classBorderColor #333333
+skinparam componentBackgroundColor #E8F4F8
+skinparam componentBorderColor #0066CC
+skinparam NodeBackgroundColor #F8F8F8
+skinparam nodeBorderColor #333333
+skinparam sequenceActorBackgroundColor #FFFACD
+skinparam arrowColor #333333
+
+title Search Agent 系统完整部署架构
+'用途：展示从客户端到存储层的完整部署拓扑、通信流、高可用配置
+
+package "客户端层" #FFFACD {
+    node "Web/Mobile\nClient" as client
+}
+
+package "接入层" #E8F4F8 {
+    node "API Gateway\n(Nginx/Kong HA)" as apigw
+    note right : Rate Limit\nAuth\nRouting
+}
+
+package "Kubernetes 多可用区集群" #F0F0F0 {
+    
+    package "Zone A (Primary)" #FFF0F0 {
+        
+        package "MCP 协调层" #FFCCCC {
+            component "MCP Service Pod 1" as mcp1 {
+                component "Request Handler" as mcp1_rh
+                component "Auth & Quota" as mcp1_aq
+                component "Task Dispatcher" as mcp1_td
+            }
+        }
+        
+        package "Search Agent 决策层" #FFDDDD {
+            component "Search Agent Pod 1" as agent1 {
+                component "Router Engine" as agent1_r
+                component "Strategy Engine" as agent1_s
+                component "Task Manager" as agent1_tm
+                component "Monitoring" as agent1_m
+            }
+        }
+        
+        package "Prompt 解析层" #FFEEEE {
+            component "Prompt Parser Pod 1" as parser1 {
+                component "LLM Inference Pool" as parser1_llm
+                component "NER & Segmentation" as parser1_ner
+                component "Intent Detection" as parser1_intent
+            }
+        }
+    }
+    
+    package "Zone B (Standby)" #F0FFF0 {
+        
+        package "MCP 协调层" #CCFFCC {
+            component "MCP Service Pod 2" as mcp2 {
+                component "Request Handler" as mcp2_rh
+                component "Auth & Quota" as mcp2_aq
+                component "Task Dispatcher" as mcp2_td
+            }
+        }
+        
+        package "Search Agent 决策层" #DDFFDD {
+            component "Search Agent Pod 2" as agent2 {
+                component "Router Engine" as agent2_r
+                component "Strategy Engine" as agent2_s
+                component "Task Manager" as agent2_tm
+                component "Monitoring" as agent2_m
+            }
+        }
+        
+        package "Prompt 解析层" #EEFFEE {
+            component "Prompt Parser Pod 2" as parser2 {
+                component "LLM Inference Pool" as parser2_llm
+                component "NER & Segmentation" as parser2_ner
+                component "Intent Detection" as parser2_intent
+            }
+        }
+    }
+    
+    package "Ingress & Service Discovery" #FFFFCC {
+        node "Service Mesh\n(Istio/Linkerd)" as servicemesh
+    }
+}
+
+package "后端处理层" #E8F4F8 {
+    
+    package "实时检索通道" #CCE5FF {
+        node "Real-time Search\nBackend\n(bin search)" as realtime_search
+        note right : Low Latency\nHigh Freshness\nP95 < 300ms
+    }
+    
+    package "爬虫池" #CCEEFF {
+        component "Crawler Pool" as crawler_pool {
+            component "Task Scheduler" as crawler_scheduler
+            component "Download Layer\n(HTTP Client)" as crawler_download
+            component "Render Layer\n(Headless Browser)" as crawler_render
+            component "Parse Layer" as crawler_parse
+            component "Dedup & Rate Limit" as crawler_dedup
+            node "Resource Pool\n(16 cores, 32GB)" as crawler_resource
+        }
+        note right : Auto-scaling: 5-50 pods\nTimeout Control\nRetry Strategy
+    }
+    
+    package "离线ETL管道" #FFCCEE {
+        component "Offline Data Pipeline" as etl_pipeline {
+            component "Batch Collector" as etl_collector
+            component "Data Cleaner" as etl_cleaner
+            component "Vectorizer\n(GPU Accelerated)" as etl_vectorizer
+            component "Indexer" as etl_indexer
+            node "Processing Pool\n(32 cores, 64GB)\nGPU Support" as etl_resource
+        }
+        note right : Scheduled batch jobs\nIncremental updates\nVersion management
+    }
+}
+
+package "消息队列层 - Mafka" #FFFACD {
+    node "Real-time Parse\nQueue" as mq_realtime
+    node "Data Processing\nQueue" as mq_processing
+    node "Index Update\nTopic" as mq_index
+    node "Quality Assessment\nTopic" as mq_quality
+}
+
+package "存储层" #F0F0F0 {
+    
+    package "向量索引存储" #E6F2FF {
+        database "Vector Index Cluster\n(Faiss/Milvus/ES)" as vector_index {
+            node "Vector Shard 1\n(replica x3)" as vs1
+            node "Vector Shard 2\n(replica x3)" as vs2
+            node "Vector Shard N\n(replica x3)" as vsn
+        }
+        note right : Sharding: Hash-based\nReplication: 3 copies\nRecovery & Failover\nQuery Latency: < 100ms
+    }
+    
+    package "倒排索引存储" #F2E6FF {
+        database "Inverted Index Cluster\n(ES/Lucene)" as inverted_index {
+            node "Text Shard 1\n(replica x3)" as is1
+            node "Text Shard 2\n(replica x3)" as is2
+            node "Text Shard N\n(replica x3)" as isn
+        }
+        note right : Segment Merge Strategy\nAlias-based Routing\nNear-real-time Refresh\nQuery Latency: < 50ms
+    }
+    
+    package "关系型数据库" #FFFFCC {
+        database "Metadata DB\n(MySQL/PostgreSQL)" as relational_db {
+            table "User Queries" as tbl_queries
+            table "Search Results" as tbl_results
+            table "Crawled Data" as tbl_crawled
+            table "Index Metadata" as tbl_meta
+            table "Task Status" as tbl_tasks
+        }
+        note right : Primary-Replica\nDaily Backup\nPoint-in-time Recovery
+    }
+    
+    package "对象存储" #F0FFF0 {
+        node "Object Storage\n(S3/MinIO)" as object_storage
+        note right : Source of Truth\nRaw Content\nIntermediate Files\nSnapshots & Versions\nAudit Logs
+    }
+}
+
+package "监控与可观测性" #FFE6E6 {
+    
+    package "指标监控" #FFD9D9 {
+        node "Prometheus" as prometheus
+        node "Grafana\nDashboard" as grafana
+        note right : P50/P95/P99 Latency\nQPS/Throughput\nError Rate\nResource Usage
+    }
+    
+    package "日志与追踪" #FFE6E6 {
+        node "ELK/Loki\nLog Aggregation" as elk
+        node "Jaeger/Zipkin\nDistributed Tracing" as jaeger
+        note right : Request Lifecycle\nPerformance Analysis\nDebug Support
+    }
+    
+    package "安全审计" #FFCCCC {
+        node "Auditd + SIEM" as auditd
+        note right : Security Events\nAccess Logs\nCompliance\nIncident Response
+    }
+    
+    package "告警与事件" #FFD9D9 {
+        node "Alertmanager" as alertmanager
+        node "On-call System" as oncall
+        note right : SLA/SLO Tracking\nIncident Management\nPage & Escalation
+    }
+}
+
+package "配置与变更管理" #FFF9E6 {
+    
+    node "Config Center\n(Lion)" as config_center {
+        note right : Dynamic Config Delivery\nGray Release\nRole-based Access
+    }
+    
+    node "Change Management\n(MCM)" as mcm {
+        note right : Canary Release (5%→10%→50%→100%)\nFast Rollback\nA/B Testing\nAudit Trail
+    }
+}
+
+'--- 连接关系 ---
+
+client --> apigw : HTTP/HTTPS\nRequest
+
+apigw --> servicemesh : Route\nBalance
+
+servicemesh --> mcp1 : Sync Request
+servicemesh --> mcp2 : Sync Request
+
+mcp1 --> agent1 : Task\nDispatching
+mcp2 --> agent2 : Task\nDispatching
+
+agent1 --> parser1 : Prompt\nParsing
+agent2 --> parser2 : Prompt\nParsing
+
+parser1 --> agent1 : QueryPackage\n+ Confidence
+
+agent1 --> realtime_search : Real-time\nQuery
+agent1 --> crawler_pool : Crawl\nTrigger
+agent1 --> mq_realtime : Push\nResults
+
+crawler_pool --> mq_realtime : Parse\nResults
+crawler_pool --> mq_processing : Structured\nData
+
+etl_pipeline --> mq_processing : Consume\nData
+etl_pipeline --> mq_index : Index\nUpdate
+
+mq_realtime --> vector_index : Vector\nIngest
+mq_index --> vector_index : Vector\nUpdate
+mq_index --> inverted_index : Text\nIndex Update
+
+mq_processing --> relational_db : Metadata\nWrite
+mq_quality --> relational_db : Quality\nScore
+
+etl_collector --> object_storage : Raw\nContent
+object_storage --> relational_db : Lineage\nInfo
+
+agent1 --> prometheus : Emit\nMetrics
+agent2 --> prometheus : Emit\nMetrics
+
+crawler_pool --> elk : Log\nStream
+etl_pipeline --> elk : Log\nStream
+
+agent1 --> jaeger : Trace\nSpan
+agent2 --> jaeger : Trace\nSpan
+
+config_center -.-> agent1 : Config\nUpdate
+config_center -.-> parser1 : Policy\nChange
+
+mcm -.-> servicemesh : Canary\nDeploy
+alertmanager -.-> oncall : Alert\nNotify
+
+'--- 说明 ---
+note bottom
+  高可用特性：
+  • 跨可用区部署（Zone A/B）
+  • 多副本故障转移（MCP x3, Search Agent x3）
+  • 消息队列确保 At-least-once 语义
+  • 向量索引 & 倒排索引三副本
+  
+  性能指标：
+  • 实时检索延迟: P95 < 300ms
+  • 向量查询延迟: < 100ms
+  • 倒排查询延迟: < 50ms
+  • 整体系统可用性: 99.9%+
+  
+  自动化能力：
+  • 金丝雀发布与自动回滚
+  • 基于负载的动态扩缩容
+  • 分布式追踪与根因分析
+  • 灾备与快速恢复
+end note
+
+@enduml
